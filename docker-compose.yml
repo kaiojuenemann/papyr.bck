@@ -30,19 +30,20 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      # Port wird von setup.sh automatisch ermittelt (frei ab 8080).
+      # Manuell ändern: BACKUP_PORT in .env anpassen.
+      - "${BACKUP_PORT:-8080}:8080"
     volumes:
       # Docker-Socket: Zugriff auf laufende Container
       # Hinweis: Unix-Sockets kennen kein echtes :ro für API-Calls.
       # Für mehr Sicherheit: docker-socket-proxy vorschalten (siehe unten).
       - /var/run/docker.sock:/var/run/docker.sock
 
-      # Export-Verzeichnis von Paperless (muss identisch mit EXPORT_PATH_IN_CONTAINER sein)
-      # Damit tar im Backup-Container direkt auf die exportierten Dateien zugreifen kann.
-      - ./paperless/export:/usr/src/paperless/export:ro
+      # Export-Verzeichnis von Paperless (wird von setup.sh gesetzt)
+      - ${PAPERLESS_EXPORT_PATH:-./paperless/export}:/usr/src/paperless/export:ro
 
-      # Backup-Ziel (Schreibzugriff erforderlich)
-      - /backup/paperless:/backup/paperless
+      # Backup-Ziel (wird von setup.sh gesetzt)
+      - ${BACKUP_DIR_HOST:-/backup/paperless}:/backup/paperless
 
     environment:
       # Name/Teil des Image-Tags des Paperless-Containers
@@ -57,21 +58,20 @@ services:
       # Arbeitsverzeichnis für manage.py IM Paperless-Container
       MANAGE_PY_WORKDIR: /usr/src/paperless/src
 
-      # Backup-Zielverzeichnis IM Backup-Container
+      # Backup-Zielverzeichnis IM Backup-Container (fester Container-Pfad)
       BACKUP_DIR: /backup/paperless
 
       # Wie viele Archive behalten? (ältere werden automatisch gelöscht)
       BACKUP_KEEP_LAST: "7"
 
-      # HTTP Basic Auth (leer lassen = kein Passwortschutz – NICHT empfohlen!)
-      BACKUP_USER: ""
-      BACKUP_PASS: ""
+      # HTTP Basic Auth – wird von setup.sh aus .env befüllt
+      BACKUP_USER: "${BACKUP_USER:-}"
+      BACKUP_PASS: "${BACKUP_PASS:-}"
 
-    # Docker-Socket-Gruppe: damit der unprivilegierte User den Socket lesen darf.
-    # GID 999 ist der typische Wert für die 'docker'-Gruppe – ggf. anpassen:
-    #   stat -c '%g' /var/run/docker.sock
+    # Docker-Socket-Gruppe: wird von setup.sh automatisch ermittelt.
+    # GID 999 ist der typische Wert für die 'docker'-Gruppe.
     group_add:
-      - "999"
+      - "${DOCKER_GID:-999}"
 
     depends_on:
       - paperless-ngx
