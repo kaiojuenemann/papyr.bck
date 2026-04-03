@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Paperless Backup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f0f;
+      --surface:   #141717;
+      --border:    #1f2424;
+      --border-hi: #2e3535;
+      --text:      #c8d0ce;
+      --text-dim:  #566060;
+      --text-hi:   #e8f0ee;
+      --accent:    #00c896;
+      --accent-dim:#00543f;
+      --warn:      #e8a320;
+      --err:       #e84040;
+      --err-dim:   #3d1010;
+      --mono:      'IBM Plex Mono', monospace;
+      --sans:      'IBM Plex Sans', sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────────────── */
+    .shell {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 20px;
+      margin-bottom: 32px;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .logo-text h1 {
+      font-family: var(--mono);
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-hi);
+      letter-spacing: 0.04em;
+    }
+    .logo-text p {
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .header-meta {
+      text-align: right;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      line-height: 1.8;
+    }
+    #clock { color: var(--text); }
+
+    /* ── Status Panel ────────────────────────────────────────────────────── */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .panel-body { padding: 16px 14px; }
+
+    /* ── Status Grid ─────────────────────────────────────────────────────── */
+    .status-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 1px;
+      background: var(--border);
+    }
+    .stat {
+      background: var(--surface);
+      padding: 14px 16px;
+    }
+    .stat-label {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+    .stat-value {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-hi);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      flex-shrink: 0;
+    }
+    .dot.ok    { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+    .dot.err   { background: var(--err);    box-shadow: 0 0 6px var(--err); }
+    .dot.warn  { background: var(--warn);   box-shadow: 0 0 6px var(--warn); }
+    .dot.pulse {
+      background: var(--warn);
+      animation: pulse 1s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; }
+      50%      { opacity: 0.3; }
+    }
+
+    /* ── Action Button ───────────────────────────────────────────────────── */
+    .action-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 20px 0;
+    }
+    #btn-backup {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--bg);
+      background: var(--accent);
+      border: none;
+      padding: 11px 28px;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+      outline: none;
+    }
+    #btn-backup:hover:not(:disabled) { background: #00e8af; }
+    #btn-backup:disabled {
+      background: var(--accent-dim);
+      color: var(--text-dim);
+      cursor: not-allowed;
+    }
+    #btn-abort {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--err);
+      background: transparent;
+      border: 1px solid var(--err);
+      padding: 10px 16px;
+      cursor: pointer;
+      display: none;
+      transition: background 0.15s;
+    }
+    #btn-abort:hover { background: var(--err-dim); }
+    #status-msg {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      flex: 1;
+    }
+
+    /* ── Log Terminal ────────────────────────────────────────────────────── */
+    .terminal-wrap {
+      position: relative;
+    }
+    .terminal-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      background: #0a0c0c;
+      border: 1px solid var(--border);
+      border-bottom: none;
+    }
+    .t-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+    }
+    .t-dot:nth-child(1) { background: #3a1515; }
+    .t-dot:nth-child(2) { background: #3a3010; }
+    .t-dot:nth-child(3) { background: #103a20; }
+    .terminal-label {
+      margin-left: auto;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+    }
+    #log {
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.7;
+      background: #0a0c0c;
+      border: 1px solid var(--border);
+      padding: 14px 16px;
+      height: 320px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: #7fa89a;
+      scroll-behavior: smooth;
+    }
+    .log-ok   { color: var(--accent); }
+    .log-err  { color: var(--err); }
+    .log-warn { color: var(--warn); }
+    .log-dim  { color: var(--text-dim); }
+    .log-hi   { color: var(--text-hi); }
+
+    /* ── Archive Table ───────────────────────────────────────────────────── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    th {
+      text-align: left;
+      padding: 8px 12px;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      vertical-align: middle;
+    }
+    .btn-dl {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: transparent;
+      border: 1px solid var(--accent-dim);
+      padding: 3px 8px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .btn-dl:hover { border-color: var(--accent); background: rgba(0,200,150,0.07); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(0,200,150,0.03); }
+    .td-name { color: var(--text-hi); }
+    .td-size { color: var(--text-dim); text-align: right; }
+    .td-date { color: var(--text-dim); }
+    .badge-latest {
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: var(--accent-dim);
+      color: var(--accent);
+      border: 1px solid var(--accent-dim);
+      padding: 1px 5px;
+      margin-left: 8px;
+    }
+    #no-archives {
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 8px 0;
+    }
+
+    /* ── Progress Bar ────────────────────────────────────────────────────── */
+    .progress-wrap {
+      height: 2px;
+      background: var(--border);
+      margin-bottom: 4px;
+      overflow: hidden;
+    }
+    #progress-bar {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      transition: width 0.4s ease;
+    }
+    #progress-bar.indeterminate {
+      width: 30%;
+      animation: slide 1.5s linear infinite;
+    }
+    @keyframes slide {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(430%); }
+    }
+
+    /* ── Footer ─────────────────────────────────────────────────────────── */
+    footer {
+      margin-top: 48px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+
+    <!-- Header -->
+    <header>
+      <div class="logo">
+        <div class="logo-icon">📦</div>
+        <div class="logo-text">
+          <h1>PAPERLESS BACKUP UI</h1>
+          <p>Document Archive Management</p>
+        </div>
+      </div>
+      <div class="header-meta">
+        <div id="clock">--:--:--</div>
+        <div id="header-date">----/--/--</div>
+      </div>
+    </header>
+
+    <!-- System Status -->
+    <div class="panel">
+      <div class="panel-head">
+        <span>System Status</span>
+        <span id="last-refresh">wird geladen…</span>
+      </div>
+      <div class="status-grid">
+        <div class="stat">
+          <div class="stat-label">Docker</div>
+          <div class="stat-value">
+            <span class="dot" id="dot-docker"></span>
+            <span id="val-docker">—</span>
+          </div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Paperless-ngx</div>
+          <div class="stat-value">
+            <span class="dot" id="dot-paperless"></span>
+            <span id="val-paperless">—</span>
+          </div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Backup-Status</div>
+          <div class="stat-value">
+            <span class="dot" id="dot-backup"></span>
+            <span id="val-backup">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action -->
+    <div class="progress-wrap"><div id="progress-bar"></div></div>
+    <div class="action-row">
+      <button id="btn-backup" onclick="startBackup()">▶ Backup starten</button>
+      <button id="btn-abort"  onclick="abortBackup()">✕ Abbrechen</button>
+      <span id="status-msg">Bereit.</span>
+    </div>
+
+    <!-- Terminal Log -->
+    <div class="terminal-wrap">
+      <div class="terminal-bar">
+        <span class="t-dot"></span>
+        <span class="t-dot"></span>
+        <span class="t-dot"></span>
+        <span class="terminal-label">backup-ui · log output</span>
+      </div>
+      <div id="log"><span class="log-dim">Warte auf Backup-Start…</span></div>
+    </div>
+
+    <!-- Archive Liste -->
+    <div class="panel" style="margin-top:24px;">
+      <div class="panel-head">
+        <span>Vorhandene Archive</span>
+        <span id="archive-count">—</span>
+      </div>
+      <div class="panel-body" style="padding:0;">
+        <div id="archive-container">
+          <p id="no-archives" style="padding:14px;">Noch keine Archive vorhanden.</p>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <span>paperless-backup-ui</span>
+      <span id="footer-dir">BACKUP_DIR: …</span>
+    </footer>
+
+  </div><!-- .shell -->
+
+  <script>
+    // ── Clock ──────────────────────────────────────────────────────────────
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('clock').textContent =
+        now.toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+      document.getElementById('header-date').textContent =
+        now.toLocaleDateString('de-DE', {year:'numeric', month:'2-digit', day:'2-digit'});
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // ── State ──────────────────────────────────────────────────────────────
+    let evtSource   = null;
+    let isRunning   = false;
+
+    const logEl     = document.getElementById('log');
+    const btnBackup = document.getElementById('btn-backup');
+    const btnAbort  = document.getElementById('btn-abort');
+    const statusMsg = document.getElementById('status-msg');
+    const progBar   = document.getElementById('progress-bar');
+
+    // ── Status Polling ─────────────────────────────────────────────────────
+    function setDot(id, state) {   // state: ok | err | warn | pulse | ''
+      const el = document.getElementById(id);
+      el.className = 'dot ' + state;
+    }
+
+    async function refreshStatus() {
+      try {
+        const r   = await fetch('/status');
+        const d   = await r.json();
+
+        // Docker
+        setDot('dot-docker', d.docker_available ? 'ok' : 'err');
+        document.getElementById('val-docker').textContent =
+          d.docker_available ? 'Verbunden' : 'Nicht erreichbar';
+
+        // Paperless
+        if (d.paperless.found) {
+          setDot('dot-paperless', 'ok');
+          document.getElementById('val-paperless').textContent =
+            `${d.paperless.name} (${d.paperless.mode})`;
+        } else {
+          setDot('dot-paperless', 'err');
+          document.getElementById('val-paperless').textContent = 'Nicht gefunden';
+        }
+
+        // Backup-Status
+        if (d.backup_running) {
+          setDot('dot-backup', 'pulse');
+          document.getElementById('val-backup').textContent = 'Läuft …';
+        } else {
+          setDot('dot-backup', d.archives.length > 0 ? 'ok' : '');
+          document.getElementById('val-backup').textContent =
+            d.archives.length > 0
+              ? `Letztes: ${d.archives[0].created}`
+              : 'Noch kein Backup';
+        }
+
+        // Archive-Tabelle
+        renderArchives(d.archives);
+        document.getElementById('archive-count').textContent =
+          `${d.archives.length} Archiv${d.archives.length !== 1 ? 'e' : ''}`;
+        document.getElementById('footer-dir').textContent =
+          `BACKUP_DIR: ${d.backup_dir}`;
+        document.getElementById('last-refresh').textContent =
+          `Aktualisiert: ${new Date().toLocaleTimeString('de-DE')}`;
+
+      } catch (e) {
+        setDot('dot-docker', 'err');
+      }
+    }
+
+    function renderArchives(archives) {
+      const container = document.getElementById('archive-container');
+      if (!archives || archives.length === 0) {
+        container.innerHTML = '<p id="no-archives" style="padding:14px;font-family:var(--mono);font-size:12px;color:var(--text-dim);">Noch keine Archive vorhanden.</p>';
+        return;
+      }
+      const table = document.createElement('table');
+      table.innerHTML = '<thead><tr><th>Dateiname</th><th>Erstellt</th><th class="td-size">Größe</th><th></th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      archives.forEach((arc, i) => {
+        const tr = document.createElement('tr');
+
+        const tdName = document.createElement('td');
+        tdName.className = 'td-name';
+        tdName.textContent = arc.name;
+        if (i === 0) {
+          const badge = document.createElement('span');
+          badge.className = 'badge-latest';
+          badge.textContent = 'LATEST';
+          tdName.appendChild(badge);
+        }
+
+        const tdDate = document.createElement('td');
+        tdDate.className = 'td-date';
+        tdDate.textContent = arc.created;
+
+        const tdSize = document.createElement('td');
+        tdSize.className = 'td-size';
+        tdSize.textContent = arc.size_mb + ' MB';
+
+        const tdDl = document.createElement('td');
+        const dlLink = document.createElement('a');
+        dlLink.className = 'btn-dl';
+        dlLink.href = '/backup/download/' + encodeURIComponent(arc.name);
+        dlLink.download = arc.name;
+        dlLink.textContent = '↓ Download';
+        tdDl.appendChild(dlLink);
+
+        tr.appendChild(tdName);
+        tr.appendChild(tdDate);
+        tr.appendChild(tdSize);
+        tr.appendChild(tdDl);
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      container.innerHTML = '';
+      container.appendChild(table);
+    }
+
+    refreshStatus();
+    setInterval(refreshStatus, 10000);
+
+    // ── Log Helpers ────────────────────────────────────────────────────────
+    function logAppend(text, cls = '') {
+      const span = document.createElement('span');
+      if (cls) span.className = cls;
+      span.textContent = text + '\n';
+      if (logEl.querySelector('.log-dim') && logEl.children.length === 1) {
+        logEl.innerHTML = '';
+      }
+      logEl.appendChild(span);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function classifyLine(line) {
+      if (/FEHLER|ERROR|error/i.test(line))    return 'log-err';
+      if (/warn|warnung/i.test(line))           return 'log-warn';
+      if (/abgeschlossen|erfolgreich|OK/i.test(line)) return 'log-ok';
+      if (/^\[/.test(line))                     return 'log-hi';
+      return '';
+    }
+
+    // ── Backup starten ─────────────────────────────────────────────────────
+    function startBackup() {
+      if (isRunning) return;
+      isRunning = true;
+
+      logEl.innerHTML = '';
+      btnBackup.disabled = true;
+      btnAbort.style.display = 'block';
+      statusMsg.textContent = 'Backup läuft …';
+
+      progBar.className = 'indeterminate';
+      progBar.style.width = '';
+
+      const startTime = Date.now();
+
+      evtSource = new EventSource('/backup/stream');
+
+      evtSource.onmessage = function(e) {
+        const data = e.data;
+
+        if (data === '__DONE_OK__') {
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+          logAppend(`\n✓ Backup erfolgreich abgeschlossen (${elapsed}s)`, 'log-ok');
+          finishBackup(true);
+          return;
+        }
+        if (data === '__DONE_ERROR__') {
+          logAppend('\n✗ Backup fehlgeschlagen.', 'log-err');
+          finishBackup(false);
+          return;
+        }
+
+        logAppend(data, classifyLine(data));
+      };
+
+      evtSource.onerror = function() {
+        if (isRunning) {
+          logAppend('Verbindung zum Server unterbrochen.', 'log-err');
+          finishBackup(false);
+        }
+      };
+    }
+
+    function finishBackup(success) {
+      if (evtSource) { evtSource.close(); evtSource = null; }
+      isRunning = false;
+      btnBackup.disabled = false;
+      btnAbort.style.display = 'none';
+      statusMsg.textContent = success ? 'Letztes Backup: erfolgreich.' : 'Letztes Backup: fehlgeschlagen.';
+      progBar.className = '';
+      progBar.style.width = success ? '100%' : '0%';
+      if (success) setTimeout(() => { progBar.style.width = '0%'; }, 3000);
+      refreshStatus();
+    }
+
+    async function abortBackup() {
+      // SSE-Verbindung sofort trennen damit keine weiteren Events ankommen
+      if (evtSource) { evtSource.close(); evtSource = null; }
+      logAppend('Abbruch wird angefordert…', 'log-warn');
+
+      try {
+        const r = await fetch('/backup/abort', { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok) {
+          logAppend('Abbruch: ' + (d.error || r.statusText), 'log-warn');
+        } else {
+          logAppend('Abort-Signal gesendet. Export wird beendet…', 'log-warn');
+        }
+      } catch (e) {
+        logAppend('Abort-Anfrage fehlgeschlagen: ' + e, 'log-warn');
+      }
+
+      finishBackup(false);
+    }
+  </script>
+</body>
+</html>

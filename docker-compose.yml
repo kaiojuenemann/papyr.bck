@@ -1,0 +1,94 @@
+# docker-compose.yml – Paperless-ngx + Backup-UI
+# ─────────────────────────────────────────────────────────────────────────────
+# Anpassen:
+#   - Volumes unter paperless-ngx an deine tatsächlichen Pfade
+#   - BACKUP_USER / BACKUP_PASS setzen (empfohlen!)
+#   - PAPERLESS_IMAGE_NAME falls du ein eigenes Image-Tag verwendest
+
+services:
+
+  # ── Paperless-ngx ──────────────────────────────────────────────────────────
+  paperless-ngx:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    restart: unless-stopped
+    # Deine restliche Paperless-Konfiguration hier eintragen:
+    # ports:
+    #   - "8000:8000"
+    # volumes:
+    #   - ./paperless/data:/usr/src/paperless/data
+    #   - ./paperless/media:/usr/src/paperless/media
+    #   - ./paperless/export:/usr/src/paperless/export
+    #   - ./paperless/consume:/usr/src/paperless/consume
+    # environment:
+    #   PAPERLESS_REDIS: redis://broker:6379
+    #   PAPERLESS_DBHOST: db
+    networks:
+      - paperless_net
+
+  # ── Backup UI ──────────────────────────────────────────────────────────────
+  paperless-backup-ui:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # Docker-Socket: Zugriff auf laufende Container
+      # Hinweis: Unix-Sockets kennen kein echtes :ro für API-Calls.
+      # Für mehr Sicherheit: docker-socket-proxy vorschalten (siehe unten).
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # Export-Verzeichnis von Paperless (muss identisch mit EXPORT_PATH_IN_CONTAINER sein)
+      # Damit tar im Backup-Container direkt auf die exportierten Dateien zugreifen kann.
+      - ./paperless/export:/usr/src/paperless/export:ro
+
+      # Backup-Ziel (Schreibzugriff erforderlich)
+      - /backup/paperless:/backup/paperless
+
+    environment:
+      # Name/Teil des Image-Tags des Paperless-Containers
+      PAPERLESS_IMAGE_NAME: paperless-ngx
+
+      # Optional: Container-Name exakt angeben (überschreibt Image-Suche)
+      # PAPERLESS_CONTAINER_NAME: paperless-ngx-paperless-ngx-1
+
+      # Pfad IM Paperless-Container, in den document_exporter exportiert
+      EXPORT_PATH_IN_CONTAINER: /usr/src/paperless/export
+
+      # Arbeitsverzeichnis für manage.py IM Paperless-Container
+      MANAGE_PY_WORKDIR: /usr/src/paperless/src
+
+      # Backup-Zielverzeichnis IM Backup-Container
+      BACKUP_DIR: /backup/paperless
+
+      # Wie viele Archive behalten? (ältere werden automatisch gelöscht)
+      BACKUP_KEEP_LAST: "7"
+
+      # HTTP Basic Auth (leer lassen = kein Passwortschutz – NICHT empfohlen!)
+      BACKUP_USER: ""
+      BACKUP_PASS: ""
+
+    # Docker-Socket-Gruppe: damit der unprivilegierte User den Socket lesen darf.
+    # GID 999 ist der typische Wert für die 'docker'-Gruppe – ggf. anpassen:
+    #   stat -c '%g' /var/run/docker.sock
+    group_add:
+      - "999"
+
+    depends_on:
+      - paperless-ngx
+    networks:
+      - paperless_net
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  # ── Socket Proxy (Produktiv-Setup) ─────────────────────────────────────────
+  # Für eingeschränkten Socket-Zugriff: docker-compose.secure.yml als Overlay
+  # verwenden (siehe README Schritt 5).
+
+networks:
+  paperless_net:
+    driver: bridge

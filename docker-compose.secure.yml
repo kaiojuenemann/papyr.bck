@@ -1,0 +1,39 @@
+# docker-compose.secure.yml – Socket-Proxy Overlay
+# ─────────────────────────────────────────────────────────────────────────────
+# Aktivierung (statt docker compose up -d):
+#
+#   docker compose -f docker-compose.yml -f docker-compose.secure.yml up -d --build
+#
+# Was dieses Overlay tut:
+#   - Fügt den Docker Socket Proxy hinzu (schränkt Socket-Zugriff auf
+#     CONTAINERS + EXEC ein – kein Zugriff auf Images, Volumes, Netzwerke usw.)
+#   - Entfernt das direkte /var/run/docker.sock-Volume aus paperless-backup-ui
+#   - Leitet DOCKER_HOST auf den Proxy um
+
+services:
+
+  # ── Docker Socket Proxy ────────────────────────────────────────────────────
+  socket-proxy:
+    image: ghcr.io/tecnativa/docker-socket-proxy:latest
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      CONTAINERS: "1"   # Container auflisten
+      EXEC:       "1"   # exec erstellen und starten
+      POST:       "1"   # POST-Requests (nötig für exec)
+      # Alles andere bleibt gesperrt (Images, Volumes, Netzwerke, etc.)
+    networks:
+      - paperless_net
+
+  # ── Backup UI – Socket durch Proxy ersetzen ────────────────────────────────
+  paperless-backup-ui:
+    volumes:
+      # Kein direkter Socket-Zugriff mehr
+      - ./paperless/export:/usr/src/paperless/export:ro
+      - /backup/paperless:/backup/paperless
+    environment:
+      DOCKER_HOST: tcp://socket-proxy:2375
+    depends_on:
+      - paperless-ngx
+      - socket-proxy
