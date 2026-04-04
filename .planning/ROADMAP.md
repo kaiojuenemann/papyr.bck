@@ -27,7 +27,9 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. A written list of all security issues (auth, Docker socket, input handling) exists, with severity and location for each
   3. A written list of all robustness gaps (error handling, edge cases, race conditions) exists, with reproduction trigger for each
   4. Container detection correctness and backup-lock race conditions are explicitly evaluated and documented
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 01-01-PLAN.md — Comprehensive code audit of app.py (security, bugs, robustness, container detection, thread safety)
 
 ### Phase 2: Documentation Audit
 **Goal**: Every gap, inaccuracy, or missing piece in the project's documentation is identified and documented as a reviewable list before any correction is applied
@@ -58,6 +60,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Code Audit | 0/? | Not started | - |
+| 1. Code Audit | 0/1 | Planning complete | - |
 | 2. Documentation Audit | 0/? | Not started | - |
 | 3. Fix & Harden | 0/? | Not started | - |
